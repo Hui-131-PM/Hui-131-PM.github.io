@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>传感器数据监控平台</title>
+  <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #0d1421 100%);
+      min-height: 100vh;
+      color: #e0e6ed;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 1920px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      text-align: center;
+      padding: 30px 20px;
+      background: rgba(13, 20, 33, 0.8);
+      border-bottom: 2px solid rgba(0, 212, 255, 0.3);
+      margin-bottom: 30px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.1), transparent);
+      animation: shimmer 3s infinite;
+    }
+
+    @keyframes shimmer {
+      0% { left: -100%; }
+      100% { left: 100%; }
+    }
+
+    .header h1 {
+      font-size: 32px;
+      font-weight: 600;
+      background: linear-gradient(90deg, #00d4ff, #00ff88);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+      text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+    }
+
+    .header .subtitle {
+      color: #8892b0;
+      font-size: 14px;
+      letter-spacing: 2px;
+    }
+
+    .status-bar {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      margin-top: 15px;
+      font-size: 13px;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #8892b0;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #00ff88;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.2); }
+    }
+
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 25px;
+      margin-bottom: 30px;
+    }
+
+    @media (max-width: 1400px) {
+      .grid-container {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 900px) {
+      .grid-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .sensor-card {
+      background: rgba(26, 31, 58, 0.6);
+      border: 1px solid rgba(0, 212, 255, 0.2);
+      border-radius: 16px;
+      padding: 24px;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .sensor-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--card-color), transparent);
+    }
+
+    .sensor-card:hover {
+      transform: translateY(-5px);
+      border-color: var(--card-color);
+      box-shadow: 0 10px 40px rgba(0, 212, 255, 0.2);
+    }
+
+    .sensor-card.temp { --card-color: #ff6b6b; }
+    .sensor-card.hum { --card-color: #00d4ff; }
+    .sensor-card.light { --card-color: #ffd93d; }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #e0e6ed;
+    }
+
+    .card-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      background: rgba(0, 212, 255, 0.1);
+    }
+
+    .temp .card-icon { background: rgba(255, 107, 107, 0.2); }
+    .hum .card-icon { background: rgba(0, 212, 255, 0.2); }
+    .light .card-icon { background: rgba(255, 217, 61, 0.2); }
+
+    .current-value {
+      text-align: right;
+    }
+
+    .value-number {
+      font-size: 48px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--card-color), #ffffff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1;
+    }
+
+    .value-unit {
+      font-size: 18px;
+      color: #8892b0;
+      margin-left: 5px;
+      display: inline;
+    }
+
+    .mini-chart {
+      height: 200px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .data-summary {
+      padding: 15px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .summary-row:last-child {
+      border-bottom: none;
+    }
+
+    .summary-label {
+      font-size: 13px;
+      color: #8892b0;
+    }
+
+    .summary-value {
+      font-size: 16px;
+      font-weight: 600;
+      color: #e0e6ed;
+    }
+
+    .summary-value.high {
+      color: #ff6b6b;
+    }
+
+    .summary-value.low {
+      color: #00d4ff;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #8892b0;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(0, 212, 255, 0.2);
+      border-top-color: #00d4ff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 15px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .last-update {
+      text-align: center;
+      color: #8892b0;
+      font-size: 12px;
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1> 传感器数据监控平台</h1>
+      <p class="subtitle">实时数据可视化 · 智能预警 · 自动刷新</p>
+      <div class="status-bar">
+        <div class="status-item">
+          <span class="status-dot"></span>
+          <span>系统运行中</span>
+        </div>
+        <div class="status-item">
+          <span>🔄 自动刷新间隔: 3秒</span>
+        </div>
+        <div class="status-item">
+          <span>📡 数据源: 实时</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-container">
+      <div class="sensor-card temp" id="temp-card">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-icon">🌡️</div>
+            <span>温度传感器</span>
+          </div>
+          <div class="current-value">
+            <div class="value-number" id="temp-value">--</div>
+            <div class="value-unit">℃</div>
+          </div>
+        </div>
+        <div class="mini-chart" id="temp-mini-chart"></div>
+        <div class="data-summary" id="temp-summary">
+          <div class="loading">
+            <div>加载数据中...</div>
+          </div>
+        </div>
+        <div class="last-update">
+          <span id="temp-last-update">等待更新</span>
+        </div>
+      </div>
+
+      <div class="sensor-card hum" id="hum-card">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-icon">💧</div>
+            <span>湿度传感器</span>
+          </div>
+          <div class="current-value">
+            <div class="value-number" id="hum-value">--</div>
+            <div class="value-unit">%</div>
+          </div>
+        </div>
+        <div class="mini-chart" id="hum-mini-chart"></div>
+        <div class="data-summary" id="hum-summary">
+          <div class="loading">
+            <div>加载数据中...</div>
+          </div>
+        </div>
+        <div class="last-update">
+          <span id="hum-last-update">等待更新</span>
+        </div>
+      </div>
+
+      <div class="sensor-card light" id="light-card">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-icon">☀️</div>
+            <span>光照传感器</span>
+          </div>
+          <div class="current-value">
+            <div class="value-number" id="light-value">--</div>
+            <div class="value-unit">lx</div>
+          </div>
+        </div>
+        <div class="mini-chart" id="light-mini-chart"></div>
+        <div class="data-summary" id="light-summary">
+          <div class="loading">
+            <div>加载数据中...</div>
+          </div>
+        </div>
+        <div class="last-update">
+          <span id="light-last-update">等待更新</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const sensorConfig = {
+      temp: {
+        name: '温度',
+        unit: '℃',
+        color: '#ff6b6b',
+        min: 0,
+        max: 50,
+        warningMin: 15,
+        warningMax: 35,
+        criticalMin: 10,
+        criticalMax: 40
+      },
+      hum: {
+        name: '湿度',
+        unit: '%',
+        color: '#00d4ff',
+        min: 0,
+        max: 100,
+        warningMin: 30,
+        warningMax: 70,
+        criticalMin: 20,
+        criticalMax: 80
+      },
+      light: {
+        name: '光照',
+        unit: 'lx',
+        color: '#ffd93d',
+        min: 0,
+        max: 100,
+        warningMin: 20,
+        warningMax: 80,
+        criticalMin: 10,
+        criticalMax: 90
+      }
+    };
+
+    const miniCharts = {};
+
+    function initMiniChart(kind) {
+      const chart = echarts.init(document.getElementById(`${kind}-mini-chart`));
+      const config = sensorConfig[kind];
+
+      const option = {
+        grid: {
+          left: 0,
+          right: 0,
+          top: 10,
+          bottom: 0
+        },
+        xAxis: {
+          type: 'category',
+          show: false,
+          data: []
+        },
+        yAxis: {
+          type: 'value',
+          show: false,
+          min: config.min,
+          max: config.max
+        },
+        series: [{
+          type: 'line',
+          data: [],
+          smooth: true,
+          showSymbol: false,
+          lineStyle: {
+            color: config.color,
+            width: 2
+          },
+          areaStyle: {
+            color: {
+              type: 'linear',
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [{
+                offset: 0,
+                color: `${config.color}40`
+              }, {
+                offset: 1,
+                color: `${config.color}05`
+              }]
+            }
+          },
+          animationDuration: 300,
+          animationEasing: 'cubicOut'
+        }]
+      };
+
+      chart.setOption(option);
+      miniCharts[kind] = chart;
+
+      window.addEventListener('resize', () => {
+        chart.resize();
+      });
+    }
+
+    function getStatus(value, kind) {
+      const config = sensorConfig[kind];
+      
+      if (value <= config.criticalMin || value >= config.criticalMax) {
+        return { class: 'critical', text: '严重' };
+      } else if (value <= config.warningMin || value >= config.warningMax) {
+        return { class: 'warning', text: '警告' };
+      } else {
+        return { class: 'normal', text: '正常' };
+      }
+    }
+
+    function formatTime(timeStr) {
+      const date = new Date(timeStr);
+      const now = new Date();
+      const diff = now - date;
+      
+      if (diff < 60000) {
+        return '刚刚';
+      } else if (diff < 3600000) {
+        return `${Math.floor(diff / 60000)}分钟前`;
+      } else {
+        return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+      }
+    }
+
+    function updateDataList(kind, data) {
+      const summaryEl = document.getElementById(`${kind}-summary`);
+      const config = sensorConfig[kind];
+      
+      if (!data || data.length === 0) {
+        summaryEl.innerHTML = '<div class="loading"><div>暂无数据</div></div>';
+        return;
+      }
+
+      const values = data.map(([time, value]) => value);
+      const latestValue = values[0];
+      const maxValue = Math.max(...values);
+      const minValue = Math.min(...values);
+      const status = getStatus(latestValue, kind);
+
+      document.getElementById(`${kind}-value`).textContent = latestValue.toFixed(1) + config.unit;
+
+      const html = `
+        <div class="summary-row">
+          <span class="summary-label">当前值</span>
+          <span class="summary-value">${latestValue.toFixed(1)}${config.unit}</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">近1小时最高</span>
+          <span class="summary-value high">${maxValue.toFixed(1)}${config.unit}</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">近1小时最低</span>
+          <span class="summary-value low">${minValue.toFixed(1)}${config.unit}</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">状态</span>
+          <span class="summary-value">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${status.class === 'normal' ? '#00ff88' : status.class === 'warning' ? '#ffd93d' : '#ff6b6b'};margin-right:5px;"></span>
+            ${status.text}
+          </span>
+        </div>
+      `;
+
+      summaryEl.innerHTML = html;
+
+      const lastUpdate = document.getElementById(`${kind}-last-update`);
+      lastUpdate.textContent = `最后更新: ${formatTime(data[0][0])}`;
+
+      updateMiniChart(kind, data);
+    }
+
+    function updateMiniChart(kind, data) {
+      const chart = miniCharts[kind];
+      const config = sensorConfig[kind];
+      
+      const chartData = data.slice(0, 30).reverse().map(([time, value]) => ({
+        name: time,
+        value: value
+      }));
+
+      const option = {
+        xAxis: {
+          data: chartData.map(d => d.name)
+        },
+        series: [{
+          data: chartData.map(d => d.value)
+        }]
+      };
+
+      chart.setOption(option);
+    }
+
+    async function fetchSensorData(kind) {
+      try {
+        const response = await fetch(`/sensor/series/?sensor=${kind}&limit=200`, {
+          cache: 'no-store'
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        if (result.ok && result.data) {
+          updateDataList(kind, result.data);
+        } else {
+          throw new Error('Invalid response format');
+        }
+      } catch (error) {
+        console.error(`Error fetching ${kind} data:`, error);
+        const listEl = document.getElementById(`${kind}-list`);
+        listEl.innerHTML = `
+          <div class="loading" style="color: #ff6b6b;">
+            <div>数据加载失败</div>
+            <div style="font-size: 12px; margin-top: 5px;">${error.message}</div>
+          </div>
+        `;
+      }
+    }
+
+    async function fetchAllData() {
+      await Promise.all([
+        fetchSensorData('temp'),
+        fetchSensorData('hum'),
+        fetchSensorData('light')
+      ]);
+    }
+
+    function init() {
+      Object.keys(sensorConfig).forEach(kind => {
+        initMiniChart(kind);
+      });
+
+      fetchAllData();
+      setInterval(fetchAllData, 3000);
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
